@@ -9,8 +9,8 @@
 
 
 %create signal time course
-cond= 'PD/PS';
-model='block';
+cond= 'FP' ;
+model='peak';
 nTrials=30; %number of trials
 tRest=60; %60 seconds rest
 fs=7.8; %sampling rate 7.8 Hz
@@ -74,7 +74,11 @@ switch model
         for i=1:sTask
             if mod(i-1,round(sIti))==0 
                 for j=1:boxlength
+                    if i+j>sTask+1
+                        break;
+                    else
                     modelVec(i+j)=1;
+                    end
                 end
             end
         end
@@ -85,10 +89,11 @@ conv_modelVec=conv(modelVec,HRF);%,'same'); %to get correct convolution, use zer
 
 std_conv_modelVec=(conv_modelVec-mean(conv_modelVec))/std(conv_modelVec); %standardize time course for simplicity
 
-%%
+%% create exemplary subjects and get their basic parameters
+noiselevel=5;
 
+%get params from exemplary subjects
 
-noiselevel=2;
 %artifical subject 1
 sub1=[randn(size(rest_sampleVec))*noiselevel; ...
     std_conv_modelVec+randn(size(std_conv_modelVec))*noiselevel]; %add random gaussian noise
@@ -97,12 +102,6 @@ sub2=[randn(size(rest_sampleVec))*noiselevel; ...
     std_conv_modelVec+randn(size(std_conv_modelVec))*noiselevel]; %add random gaussian noise
 
 
-
-
-
-
-%%
-
 %calculate basic coherence
 [Rsq,period,~,coi,~]=wtc([exp_tVec', sub1(1:sExp)],[exp_tVec', sub2(1:sExp)],'mcc',0, 'ArrowSize',0.5, 'ArrowDensity', [30,20]);
 for j=1:1:length(coi)
@@ -110,47 +109,88 @@ for j=1:1:length(coi)
 end
 
 %get cutoff
-poi=[6.6 14.02]; %period of interest in sec
+poi=[5 11];%[6.6 14.02]; %period of interest in sec
 pnoi(1) = find(period > poi(1), 1, 'first');
 pnoi(2) = find(period < poi(2), 1, 'last');
 %find cutoff (coi) at pnoi
 pcoi = max(coi(pnoi(1)),coi(pnoi(2)));
 cutoff=find(exp_tVec>pcoi,1,'first');
 
-soi=mean(Rsq(pnoi(1):pnoi(2),:),1,'omitnan'); %signal of interest
 
-c_rest=mean(soi(1:length(rest_tVec)),'omitnan');
+%% simulate a bunch of additional subjects
 
-windowsize=30*fs; %30 sec
-c_task_win=mean_wtc_sliding_window(soi(tRest*fs+1:end), cutoff, windowsize);
+nPairs=30;
+pairMat=NaN(nPairs,2,length(sub1)); %because of convolution, length(sub1))>sExp; will be cut later
 
-c_delta=c_task_win-c_rest;
+windowsize=60*fs; %30 sec
+sWin=sExp-length(rest_sampleVec)-windowsize; %number of data points for sliding window coherence
+c_deltaMat=NaN(nPairs,sWin);
+
+pRsq=NaN(nPairs,size(Rsq,1),size(Rsq,2));
+
+for p=1:nPairs
+    
+    %sub1
+    pairMat(p,1,:)=[randn(size(rest_sampleVec))*noiselevel; ...
+    std_conv_modelVec+randn(size(std_conv_modelVec))*noiselevel];
+    %sub2
+    pairMat(p,2,:)=[randn(size(rest_sampleVec))*noiselevel; ...
+    std_conv_modelVec+randn(size(std_conv_modelVec))*noiselevel];
+    
+    %calc coherence
+    [pRsq(p,:,:),period,~,coi,~]=wtc([exp_tVec', squeeze(pairMat(p,1,1:sExp))],[exp_tVec', squeeze(pairMat(p,2,1:sExp))],'mcc',0, 'ArrowSize',0.5, 'ArrowDensity', [30,20]);
+    for j=1:1:length(coi)
+        pRsq(p,period >= coi(j), j) = NaN; 
+    end
+    
+    %get signal of interest
+    soi=squeeze(mean(pRsq(p,pnoi(1):pnoi(2),:),2,'omitnan'));
+    
+    %calc coherence of rest block
+    c_rest=mean(soi(1:length(rest_tVec)),'omitnan');
+    
+    %calc sliding window coherence
+    c_task_win=mean_wtc_sliding_window(soi(tRest*fs+1:end), cutoff, windowsize);
+    
+    %calc difference task-rest for each window
+    c_deltaMat(p,:)=c_task_win-c_rest;
+
+end
+
+
+c_deltamean=mean(c_deltaMat,1,'omitnan');
+c_deltastd=std(c_deltaMat,0,1,'omitnan')/sqrt(size(c_deltaMat,1)); %SEM
+
+Rsqmean=squeeze(mean(pRsq,1,'omitnan'));
+Rsqstd=squeeze(std(pRsq,0,1,'omitnan')/sqrt(size(pRsq,1))); %SEM
+
 
 %% make figures
 
 figure;
 f=tiledlayout(5,1);
-title(f, ['condition ' cond ', ' model ' model']);
+title(f, ['RPS simulation, condition ' cond ', ' model ' model, sliding window size ' num2str(windowsize/fs) ' sec, SNR (lin) 1/' num2str(noiselevel)], 'FontSize', 16);
 
 %model
 ax1=nexttile;
 
-total_modelVec=[zeros(length(rest_tVec),1); modelVec(2:end)];
-total_conv_modelVec=[zeros(length(rest_tVec),1); conv_modelVec(2:length(modelVec))];
+total_modelVec=[zeros(length(rest_tVec)-1,1); modelVec(1:end)];
+total_conv_modelVec=[zeros(length(rest_tVec)-1,1); std_conv_modelVec(1:length(modelVec))];
 
 plot(ax1,exp_tVec, total_modelVec); hold on; plot(ax1,exp_tVec,total_conv_modelVec);hold off;
 
 %plot(ax1,tVec, modelVec); hold on; plot(ax1,tVec,conv_modelVec(1:length(modelVec)));hold off;
-ax1.YLim=[-0.1 1.1];
+%ax1.YLim=[-0.1 1.1];
 xlabel('time (sec)');
 legend(ax1,{'model','hrf-conv. model'});
+title(ax1, 'model');
 
 %artificial subjects
 ax2=nexttile;
 plot(ax2,exp_tVec,sub1(1:length(exp_tVec))); hold on; plot(ax2,exp_tVec,sub2(1:length(exp_tVec))); hold off;
 legend(ax2,{'sub1','sub2'});
 xlabel('time (sec)');
-
+title(ax2,'two exemplary subjects');
 
 %wtc
 ax3=nexttile;
@@ -158,24 +198,35 @@ wtc([exp_tVec', sub1(1:sExp)],[exp_tVec', sub2(1:sExp)],'mcc',0, 'ArrowSize',0.2
 xlabel('time (sec)');
 %wtc(sub1(1:length(exp_tVec)),sub2(1:length(exp_tVec)),'mcc',0, 'ArrowSize',0.2, 'ArrowDensity', [30,10])
 %xlabel('time (samples)');
+title(ax3, 'exemplary coherence magnitude scalogram');
 
 
 %sliding window wtc
 ax4=nexttile;
-slidingwin=[zeros(length(rest_sampleVec)+windowsize,1); c_delta];
-plot(exp_tVec, slidingwin);
-ylabel('delta wtc');
+c_deltamean_forplot=[zeros(length(rest_sampleVec)+windowsize,1); c_deltamean'];
+c_deltastd_forplot=[zeros(length(rest_sampleVec)+windowsize,1); c_deltastd'];
+shadedErrorBar(exp_tVec,c_deltamean_forplot, c_deltastd_forplot, 'lineProps',{'-r'});
+hold on
+hline = refline(0, 0);
+hline.Color = 'k';
+%slidingwin=[zeros(length(rest_sampleVec)+windowsize,1); c_delta];
+%plot(exp_tVec, slidingwin);
+ylabel('\Delta wtc');
 xlabel('time (sec)');
+title(ax4, ['sliding window coherence, window ' num2str(windowsize/fs) ' sec, increment 1 sample']);
 
 linkaxes([ax1,ax2,ax3, ax4],'x');
 
 
 %frequency/period range
 ax4=nexttile;
-avg=mean(Rsq,2,'omitnan');
-periodsec=period/fs;
+avg=mean(Rsqmean,2,'omitnan');
+avgstd=mean(Rsqstd,2,'omitnan'); %for display only, need to find better stat!
+periodsec=period;%/fs;
 index=find(periodsec<=50,1,'last'); %only interested in periods up to 50 sec (arbitrary)
-plot(ax4,periodsec(1:index),avg(1:index));
+shadedErrorBar(periodsec(1:index),avg(1:index), avgstd(1:index), 'lineProps',{'-r'});
+%plot(ax4,periodsec(1:index),avg(1:index));
 %semilogx(periodsec,avg); 
 ylabel('mean wtc');
 xlabel('period (sec)');
+title('average coherence - frequency/period distribution');
