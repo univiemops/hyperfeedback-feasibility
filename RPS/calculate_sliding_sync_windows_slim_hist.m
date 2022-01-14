@@ -1,4 +1,6 @@
-       %%  calculate sync values in different windows
+    %%  calculate sync values in different windows
+    %
+    %KK 14.01. now with both sessions together.
     %
     %KK 13.01. now with histogram. To decide: how to pool over rest and/or
     %both task conditions
@@ -75,11 +77,13 @@
     RestSamp=509; %65.152 sec rest duration ideally
     %windowlength=triallength*8;%triallength*2; %for now, can change
     
-    windowsizelist=[triallength*2 triallength*4 triallength*6];
+    windowsizelist=[floor(20*f) floor(30*f) floor(40*f) floor(50*f)];%[triallength*2 triallength*4 triallength*6];
     channellist=[13,14,15,16];
     
     meanCohentime=NaN(Nch,RunSamp,2,length(windowsizelist));
     sdCohentime=NaN(Nch,RunSamp,2,length(windowsizelist));
+    
+    totsdCohentime=NaN(Nch,RunSamp,length(windowsizelist));
     
     meanCohensub=NaN(Nch,length(pairs),2,length(windowsizelist));
     sdCohensub=NaN(Nch,length(pairs),2,length(windowsizelist));    
@@ -120,7 +124,7 @@
     hbo1=hbo;
     load([path '/Data_' conds{c} '/RPS_01_sub2_' conds{c} '.mat']); %get data of exemplary pair: hbo, hbr, t (time stamps of measurement)
     hbo2=hbo;
-    poi=[5 11];%[6 10];%[5 11]; %[6 20];
+    poi=[6 20];%[6 10];%[5 11]; %[6 20];
     pnoi = zeros(2,1);
     poi_calc=zeros(2,1);
     
@@ -230,11 +234,11 @@
             c_rest_win3=mean_wtc_sliding_window(soi_rest3, cutoff, windowsize);
             mean_c_rest_win3=mean(c_rest_win3);
             
-            %for now only try first rest block
-            grandmean_c_rest_win=(mean_c_rest_win1);%+mean_c_rest_win2+ mean_c_rest_win3)/3;  
+
+            grandmean_c_rest_win=(mean_c_rest_win1+mean_c_rest_win2+ mean_c_rest_win3)/3;  %all blocks are of equal length
            
-            std_avg_rest(ch,i)=(std(c_rest_win1));%+std(c_rest_win2)+std(c_rest_win3))/3; %since all rest blocks are of equal length, this is the same as mean adjusting each rest block's windows and then calculating total std
-                      
+        %    std_avg_rest(ch,i)=(std(c_rest_win1)+std(c_rest_win2)+std(c_rest_win3))/3; 
+            std_avg_rest(ch,i)=sqrt((var(c_rest_win1)+var(c_rest_win2)+var(c_rest_win3))/3); %since all rest blocks are of equal length, this is the same as mean adjusting each rest block's windows and then calculating total std                     
             
             c_deltad(ch,i,1,:)=c_task_win1(1:defacto_length_results)-grandmean_c_rest_win;%mc_results_rest(ch,i);  %here are sometimes 2-3 samples missmatch between trigger logging and designed length. Taking designed length to be identical for all sub. For now shouldn't change results but check later!
             c_deltad(ch,i,2,:)=c_task_win2(1:defacto_length_results)-grandmean_c_rest_win;%mc_results_rest(ch,i);
@@ -262,7 +266,6 @@
                     
                     Cohens_d_dyad(ch,d,run,l)= c_deltad(ch,d,run,l)/std_avg_rest(ch,d);
                     
-                    
                 end
 
             end
@@ -277,9 +280,12 @@
 %        sdCohensub=NaN(Nch,length(pairs),2,length(windowsizelist)); 
         
         end
-        rmeanCohentime(ch,:,win)=mean(meanCohentime(ch,:,:,win),3);
-    %    tmp=squeeze(std(Cohens_d_dyad(ch,:,run,:),0,2));
-        rsdCohentime(ch,end-defacto_length_results+1:end,win)=mean(squeeze(std(Cohens_d_dyad(ch,:,run,:),0,2)),3)/sqrt(size(Cohens_d_dyad,2));
+        
+        %average standard deviation/SEM over both runs
+        totsdCohentime(ch,end-defacto_length_results+1:end,win)=1/sqrt(size(Cohens_d_dyad,2))*sqrt(1/2*var(Cohens_d_dyad(ch,:,1,:),0,2)+var(Cohens_d_dyad(ch,:,2,:),0,2));
+        
+         rmeanCohentime(ch,:,win)=mean(meanCohentime(ch,:,:,win),3);
+%     %    tmp=squeeze(std(Cohens_d_dyad(ch,:,run,:),0,2));
     end
 
     
@@ -330,44 +336,44 @@ legend('channel 13', 'channel 14', 'channel 15', 'channel 16');
 end
 %linkaxes([ax(1),ax(2), ax(3), ax(4), ax(5)],'xy');
 
-% %% plot stuff mean
-% 
-% fig=figure;
-% fig.Position(3:4)=[1200 900];
-% tls=tiledlayout('flow');
-% tls.TileSpacing='none';
-% tls.Padding='compact';
-% 
-%   title(tls,['Contrast-to-noise ratio (\equiv Cohen''s d)'], 'FontSize', 20, 'FontWeight', 'bold');
-%   
-% for  win=1:length(windowsizelist)
-%     
-% ax(win)=nexttile;
-% %x=1+300:3901+300;
-% %plot(x,Cohens_d_dyad(10,:),x,Cohens_d_dyad(14,:),x,Cohens_d_dyad(40,:),x,Cohens_d_dyad(31,:), 'LineWidth',2);
-% shadedErrorBar(1:RunSamp, rmeanCohentime(13,:,win), rsdCohentime(13,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color',[0.8500 0.3250 0.0980]},'patchSaturation', 0.3); %red
-% hold on
-% shadedErrorBar(1:RunSamp, rmeanCohentime(14,:,win), rsdCohentime(14,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0.9290 0.6940 0.1250]},'patchSaturation', 0.3); %yellow 
-% shadedErrorBar(1:RunSamp, rmeanCohentime(15,:,win), rsdCohentime(15,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0.4660 0.6740 0.1880]},'patchSaturation', 0.3); %green
-% shadedErrorBar(1:RunSamp ,rmeanCohentime(16,:,win), rsdCohentime(16,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0 0.4470 0.7410]},'patchSaturation', 0.3); %blue
-% hold off 
-% yline(0);
-% 
-% %  ax.XTick=1:600:4000;
-% %  strval=mat2str(windowsize/fs:60:4000/fs);
-% %  strval=erase(strval,'[');
-% %  strval=erase(strval,']');
-% %  strval=split(strval,' ');
-% %  ax.XTickLabel=strval;
-%  ax(win).FontSize = 14;
-%  %set(Im, 'XData',task_times);
-% 
-% legend('channel 13', 'channel 14', 'channel 15', 'channel 16');
-%  xlabel('time (samples)');
-%  ylabel('Contrast-to-noise ratio');
-%   title(ax(win), ['windowsize=' num2str(windowsizelist(win)/f) ' sec']);
-%   
-% end
+%% plot stuff mean
+
+fig=figure;
+fig.Position(3:4)=[1200 900];
+tls=tiledlayout('flow');
+tls.TileSpacing='none';
+tls.Padding='compact';
+
+  title(tls,['Contrast-to-noise ratio (\equiv Cohen''s d)'], 'FontSize', 20, 'FontWeight', 'bold');
+  
+for  win=1:length(windowsizelist)
+    
+ax(win)=nexttile;
+%x=1+300:3901+300;
+%plot(x,Cohens_d_dyad(10,:),x,Cohens_d_dyad(14,:),x,Cohens_d_dyad(40,:),x,Cohens_d_dyad(31,:), 'LineWidth',2);
+shadedErrorBar(1:RunSamp, rmeanCohentime(13,:,win), totsdCohentime(13,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color',[0.8500 0.3250 0.0980]},'patchSaturation', 0.3); %red
+hold on
+shadedErrorBar(1:RunSamp, rmeanCohentime(14,:,win), totsdCohentime(14,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0.9290 0.6940 0.1250]},'patchSaturation', 0.3); %yellow 
+shadedErrorBar(1:RunSamp, rmeanCohentime(15,:,win), totsdCohentime(15,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0.4660 0.6740 0.1880]},'patchSaturation', 0.3); %green
+shadedErrorBar(1:RunSamp ,rmeanCohentime(16,:,win), totsdCohentime(16,:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0 0.4470 0.7410]},'patchSaturation', 0.3); %blue
+hold off
+yline(0);
+
+%  ax.XTick=1:600:4000;
+%  strval=mat2str(windowsize/fs:60:4000/fs);
+%  strval=erase(strval,'[');
+%  strval=erase(strval,']');
+%  strval=split(strval,' ');
+%  ax.XTickLabel=strval;
+ ax(win).FontSize = 14;
+ %set(Im, 'XData',task_times);
+
+legend('channel 13', 'channel 14', 'channel 15', 'channel 16');
+ xlabel('time (samples)');
+ ylabel('Contrast-to-noise ratio');
+  title(ax(win), ['windowsize=' num2str(windowsizelist(win)/f) ' sec']);
+  
+end
 
 %% make window histogram
 
@@ -383,11 +389,11 @@ sdmeanCohen16=squeeze(mean(sdCohentime(16,:,1,:),2,'omitnan'));
 fhist=figure;
 fhist.Position(3:4)=[800 600];
 tls=tiledlayout('flow');
-txt=title(tls,'Contrast-to-noise-ratio (CNR) for different integration window lengths');
+txt=title(tls,'RPS data: Contrast-to-noise-ratio (CNR) for different integration window lengths - first run');
 txt.FontSize=18;
 txt.FontWeight='bold';
 
-windows=windowsizelist;
+windows=round(windowsizelist/f);
 
 ax1=nexttile;
 bar(windows, meanmeanCohen13, 'LineWidth', 1.5); hold on
@@ -395,7 +401,7 @@ er=errorbar(windows,meanmeanCohen13,sdmeanCohen13,sdmeanCohen13,'LineWidth', 1.5
 er.Color=[0 0 0];
 er.LineStyle='none';
 ax1.FontSize=13;
-ax1.YLim=[-1 10];
+ax1.YLim=[-1 8];
 ylabel('CNR');
 xlabel('window length (sec)');
 title(ax1, 'channel 13');
@@ -430,72 +436,82 @@ ylabel('CNR');
 xlabel('window length (sec)');
 title(ax4, 'channel 16');
 
-%linkaxes([ax1,ax2, ax3, ax4],'y');
-linkaxes([ax2, ax3, ax4],'y');
+linkaxes([ax1,ax2, ax3, ax4],'y');
 
 
 
-% %% make window histogram - try out other stuff
-% 
-% meanmeanCohen13=squeeze(mean(meanCohensub(13,:,1,:),2,'omitnan'));
-% sdmeanCohen13=squeeze(mean(sdCohensub(13,:,1,:),2,'omitnan'));%std(meanCohen10time,0,1,'omitnan')/sqrt(size(meanCohen10time,1));
-% meanmeanCohen14=squeeze(mean(meanCohensub(14,:,1,:),2,'omitnan'));
-% sdmeanCohen14=squeeze(mean(sdCohensub(14,:,1,:),2,'omitnan'));
-% meanmeanCohen15=squeeze(mean(meanCohensub(15,:,1,:),2,'omitnan'));
-% sdmeanCohen15=squeeze(mean(sdCohensub(15,:,1,:),2,'omitnan'));
-% meanmeanCohen16=squeeze(mean(meanCohensub(16,:,1,:),2,'omitnan'));
-% sdmeanCohen16=squeeze(mean(sdCohensub(16,:,1,:),2,'omitnan'));
-% 
-% fhist=figure;
-% fhist.Position(3:4)=[800 600];
-% tls=tiledlayout('flow');
-% txt=title(tls,'Contrast-to-noise-ratio (CNR) for different integration window lengths');
-% txt.FontSize=18;
-% txt.FontWeight='bold';
-% 
-% windows=windowsizelist;
-% 
-% ax1=nexttile;
-% bar(windows, meanmeanCohen13, 'LineWidth', 1.5); hold on
-% er=errorbar(windows,meanmeanCohen13,sdmeanCohen13,sdmeanCohen13,'LineWidth', 1.5);
-% er.Color=[0 0 0];
-% er.LineStyle='none';
-% ax1.FontSize=13;
-% ax1.YLim=[-1 10];
-% ylabel('CNR');
-% xlabel('window length (sec)');
-% title(ax1, 'channel 13');
-% 
-% ax2=nexttile;
-% bar(windows, meanmeanCohen14, 'LineWidth', 1.5); hold on
-% er=errorbar(windows,meanmeanCohen14,sdmeanCohen14,sdmeanCohen14,'LineWidth', 1.5);
-% er.Color=[0 0 0];
-% er.LineStyle='none';
-% ax2.FontSize=13;
-% ylabel('CNR');
-% xlabel('window length (sec)');
-% title(ax2, 'channel 14');
-% 
-% ax3=nexttile;
-% bar(windows, meanmeanCohen15, 'LineWidth', 1.5); hold on
-% er=errorbar(windows,meanmeanCohen15,sdmeanCohen15,sdmeanCohen15,'LineWidth', 1.5);
-% er.Color=[0 0 0];
-% er.LineStyle='none';
-% ax3.FontSize=13;
-% ylabel('CNR');
-% xlabel('window length (sec)');
-% title(ax3, 'channel 15');
-% 
-% ax4=nexttile;
-% bar(windows, meanmeanCohen16, 'LineWidth', 1.5); hold on
-% er=errorbar(windows,meanmeanCohen16,sdmeanCohen16,sdmeanCohen16,'LineWidth', 1.5);
-% er.Color=[0 0 0];
-% er.LineStyle='none';
-% ax4.FontSize=13;
-% ylabel('CNR');
-% xlabel('window length (sec)');
-% title(ax4, 'channel 16');
-% 
-% %linkaxes([ax1,ax2, ax3, ax4],'y');
-% linkaxes([ax2, ax3, ax4],'y');
+ %% make window histogram - try out other stuff
+
+meanmeanCohenr13=squeeze(mean(meanCohentime(13,:,:,:),2,'omitnan'));
+meanmeanCohen13=mean(meanmeanCohenr13,1);
+sdmeanCohen13=squeeze(mean(totsdCohentime(13,:,:),2,'omitnan'));
+
+
+meanmeanCohenr14=squeeze(mean(meanCohentime(14,:,:,:),2,'omitnan'));
+meanmeanCohen14=mean(meanmeanCohenr14,1);
+sdmeanCohen14=squeeze(mean(totsdCohentime(14,:,:),2,'omitnan'));
+
+
+meanmeanCohenr15=squeeze(mean(meanCohentime(15,:,:,:),2,'omitnan'));
+meanmeanCohen15=mean(meanmeanCohenr15,1);
+sdmeanCohen15=squeeze(mean(totsdCohentime(15,:,:),2,'omitnan'));
+
+
+meanmeanCohenr16=squeeze(mean(meanCohentime(16,:,:,:),2,'omitnan'));
+meanmeanCohen16=mean(meanmeanCohenr16,1);
+sdmeanCohen16=squeeze(mean(totsdCohentime(16,:,:),2,'omitnan'));
+
+
+fhist2=figure;
+fhist2.Position(3:4)=[800 600];
+tls2=tiledlayout('flow');
+txt=title(tls2,'RPS data: Contrast-to-noise-ratio (CNR) for different integration window lengths - both runs');
+txt.FontSize=18;
+txt.FontWeight='bold';
+
+windows=round(windowsizelist/f);
+
+ax1=nexttile;
+bar(windows, meanmeanCohen13, 'LineWidth', 1.5); hold on
+er=errorbar(windows,meanmeanCohen13,sdmeanCohen13,sdmeanCohen13,'LineWidth', 1.5);
+er.Color=[0 0 0];
+er.LineStyle='none';
+ax1.FontSize=13;
+ax1.YLim=[-1 8];
+ylabel('CNR');
+xlabel('window length (sec)');
+title(ax1, 'channel 13');
+
+ax2=nexttile;
+bar(windows, meanmeanCohen14, 'LineWidth', 1.5); hold on
+er=errorbar(windows,meanmeanCohen14,sdmeanCohen14,sdmeanCohen14,'LineWidth', 1.5);
+er.Color=[0 0 0];
+er.LineStyle='none';
+ax2.FontSize=13;
+ylabel('CNR');
+xlabel('window length (sec)');
+title(ax2, 'channel 14');
+
+ax3=nexttile;
+bar(windows, meanmeanCohen15, 'LineWidth', 1.5); hold on
+er=errorbar(windows,meanmeanCohen15,sdmeanCohen15,sdmeanCohen15,'LineWidth', 1.5);
+er.Color=[0 0 0];
+er.LineStyle='none';
+ax3.FontSize=13;
+ylabel('CNR');
+xlabel('window length (sec)');
+title(ax3, 'channel 15');
+
+ax4=nexttile;
+bar(windows, meanmeanCohen16, 'LineWidth', 1.5); hold on
+er=errorbar(windows,meanmeanCohen16,sdmeanCohen16,sdmeanCohen16,'LineWidth', 1.5);
+er.Color=[0 0 0];
+er.LineStyle='none';
+ax4.FontSize=13;
+ylabel('CNR');
+xlabel('window length (sec)');
+title(ax4, 'channel 16');
+
+linkaxes([ax1,ax2, ax3, ax4],'y');
+
 
