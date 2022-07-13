@@ -1,5 +1,11 @@
 %% time windows with music data
 %
+%12.07. clean script, add switches
+%
+%11.07. bugfixes - totCohen for correct total effect size for bar plots
+%
+%25.03. minor edits for figure
+%
 %15.10.21
 %
 %KK 17.08. adapting for sliding wtc windows. throwing out corr for now.
@@ -19,27 +25,27 @@
 %from paper:
 %FOI: 0.07-0.15Hz  (period 6.61-14.01s)
 %musical phrase 6.64\pm 1.56s
-% compute complete rest block, take blocks of task phase
-% taking hbo, as in paper
+%significant channels in the main study: 10,14,31,40
 
 
-path=['/Users/kathrin/data/Music_fNIRS/data'];
+path=['/Users/kathrin/data/Music_fNIRS/data']; %use your data path
+
+%experiment specifics
 pairs={'01','02','03','04','05','06', '07','08','09','10','11','12'};
-Nch=44; %bad channels will have zeros
-phrase=6.61;%sec
-%T= 36; %how many windows?  36=about(6600-1800)/fs/(2*phrase) for complete block
-%T=32; %31=about(6600-1800-600)/fs/(2*phrase) for block minus learning init
-%winsize=round(2*phrase);%roughly 2*phrase=13 sec (multiples of phrase?)
-offset=600;
+Nch=44; %Number of channels; bad channels will have zeros
 fs=10; %sampling rate 10 Hz
 task_indices=1800+600:6600; %signal of interest for task block
-%windowsize=300;
-rest_indices=1:1800;
+rest_indices=1:1800; %experiment starts with rest
 
+poi=[6.6 14.02]; %poi = period of interest
 
-windowsizelist=[200 400 600 800 1000 1200];
+%windowlengths to be examined in samples
+windowsizelist=[200 300 400 500];
 
+%if only significant channels wanted:
+channellist=[10,14,31,40];
 
+%initialize all kinds of variables
 meanCohen10time=NaN(length(task_indices),length(windowsizelist));
 sdCohen10time=NaN(length(task_indices),length(windowsizelist));
 meanCohen14time=NaN(length(task_indices),length(windowsizelist));
@@ -49,8 +55,20 @@ sdCohen31time=NaN(length(task_indices),length(windowsizelist));
 meanCohen40time=NaN(length(task_indices),length(windowsizelist));
 sdCohen40time=NaN(length(task_indices),length(windowsizelist));
 
+totmeanCohen10=NaN(length(windowsizelist),1);
+totsdCohen10=NaN(length(windowsizelist),1);
+totmeanCohen14=NaN(length(windowsizelist),1);
+totsdCohen14=NaN(length(windowsizelist),1);
+totmeanCohen31=NaN(length(windowsizelist),1);
+totsdCohen31=NaN(length(windowsizelist),1);
+totmeanCohen40=NaN(length(windowsizelist),1);
+totsdCohen40=NaN(length(windowsizelist),1);
+
+%chromophore switch
+chromophore=2; %1= HbO, 2=HbR
 
 
+%loop over windowsizes
 for win=1:length(windowsizelist)
     
     windowsize=windowsizelist(win);
@@ -58,30 +76,41 @@ for win=1:length(windowsizelist)
     defacto_length_results=length(task_indices)-windowsize;
     defacto_length_rest=length(rest_indices)-windowsize;
     
-    %coherence
-    c_results_rest=NaN(Nch,length(pairs));
+    %initialize coherence variables
     c_results_rest_win=NaN(Nch,length(pairs), defacto_length_rest);
     c_results_task=NaN(Nch,length(pairs),defacto_length_results);
+    
+    mc_results_rest_win=NaN(Nch,length(pairs));
+    mc_results_task=NaN(Nch,length(pairs));
+    
     c_delta=NaN(Nch,length(pairs),defacto_length_results); %matrix with all delta stats per window length
-    
-    %    c_deltad=zeros(Nch,length(pairs),d,Nwd)*NaN;%for the half trials
-    
+    mc_delta=NaN(Nch,length(pairs));
     
     
     
     %get exact parameters for period and filter
-    poi=[6.6 14.02]; %period of interest
     
-    load([path '/FF_3_MES_Probe1.mat']); %get data of exemplary pair
-    hbo1test=hbo;
-    load([path '/FF_3_MES_Probe3.mat']); %get data of exemplary pair
-    hbo2test=hbo;
+    %get data of exemplary pair
+    if chromophore==1
+        load([path '/FF_3_MES_Probe1.mat']);
+        hb1test=hbo;
+        load([path '/FF_3_MES_Probe3.mat']);
+        hb2test=hbo;
+    elseif chromophore==2
+        load([path '/FF_3_MES_Probe1.mat']);
+        hb1test=hbr;
+        load([path '/FF_3_MES_Probe3.mat']);
+        hb2test=hbr;
+    else
+        error('chromophore not specified.');
+    end
+    
     
     pnoi = zeros(2,1);
     poi_calc=zeros(2,1);
     
-    sigPart1 = [t, hbo1test(:,14)];
-    sigPart2 = [t, hbo2test(:,14)];
+    sigPart1 = [t, hb1test(:,14)];
+    sigPart2 = [t, hb2test(:,14)];
     [~,period,~,coi,~] = wtc(sigPart1, sigPart2, 'mcc', 0);
     pnoi(1) = find(period > poi(1), 1, 'first');
     pnoi(2) = find(period < poi(2), 1, 'last');
@@ -90,83 +119,105 @@ for win=1:length(windowsizelist)
     poi_calc(2)=period(pnoi(2));
     
     
-    %find cutoff (coi) at pnoi
+    %find cutoff (coi = cone of influence) at pnoi
     pcoi = max(coi(pnoi(1)),coi(pnoi(2)));
     cutoff=find(t>pcoi,1,'first');
     
     
-    %    wtc(sigPart1, sigPart2, 'mcc', 0); %have a look at the data
     
-    %now real stuff
+    %now do the real stuff!
+    
+    %load in pairs, use part learning condition
     for i=1:length(pairs)
         
         %load in participants
-        hbo1=zeros(size(hbo1test,1),Nch);
-        hbr1=hbo1;
-        hbo2=zeros(size(hbo2test,1),Nch);
-        hbr2=hbo2;
-        %for a start only part learning
-        %right hem both participants
-        load([path '/FF_' num2str(i) '_MES_Probe1.mat']); %get data (hb and fs)
-        hbo1(:,1:Nch/2)=hbo; %first 22 channels right hem
-        hbr1(:,1:Nch/2)=hbr;
-        load([path '/FF_' num2str(i) '_MES_Probe3.mat']); %get data (hb and fs)
-        hhbo2(:,1:Nch/2)=hbo;
-        hbr2(:,1:Nch/2)=hbr;
         
-        %left hem both participants
-        load([path '/FF_' num2str(i) '_MES_Probe2.mat']); %get data (hb and fs)
-        hbo1(:,Nch/2+1:Nch)=hbo; %next 22 channels left hem
-        hbr1(:,Nch/2+1:Nch)=hbr;
-        load([path '/FF_' num2str(i) '_MES_Probe4.mat']); %get data (hb and fs)
-        hhbo2(:,Nch/2+1:Nch)=hbo;
-        hbr2(:,Nch/2+1:Nch)=hbr;
+        hb1=zeros(size(hb1test,1),Nch);
+        %       hbr1=zeros(size(hb1test,1),Nch);
+        hb2=zeros(size(hb2test,1),Nch);
+        %      hbr2=zeros(size(hb2test,1),Nch);
         
         
-        parfor ch=1:Nch %for now do this for every channel separately
+        if chromophore==1
             
-            %get signal of interest
-            if ~isnan(hbo1(1, ch)) && ~isnan(hbo2(1, ch))   % check if this channel was not rejected in both subjects during preprocessing
-                sigPart1 = [t, hbr1(:,ch)];
-                sigPart2 = [t, hbr2(:,ch)];
+            %right hem both participants
+            load([path '/FF_' num2str(i) '_MES_Probe1.mat']); %get data (hb and fs)
+            hb1(:,1:Nch/2)=hbo; %first 22 channels right hem
+            load([path '/FF_' num2str(i) '_MES_Probe3.mat']); %get data (hb and fs)
+            hb2(:,1:Nch/2)=hbo;
+            
+            %left hem both participants
+            load([path '/FF_' num2str(i) '_MES_Probe2.mat']); %get data (hb and fs)
+            hb1(:,Nch/2+1:Nch)=hbo; %next 22 channels left hem
+            load([path '/FF_' num2str(i) '_MES_Probe4.mat']); %get data (hb and fs)
+            hb2(:,Nch/2+1:Nch)=hbo;
+            
+        elseif chromophore==2
+            
+            %right hem both participants
+            load([path '/FF_' num2str(i) '_MES_Probe1.mat']); %get data (hb and fs)
+            hb1(:,1:Nch/2)=hbr; %first 22 channels right hem
+            load([path '/FF_' num2str(i) '_MES_Probe3.mat']); %get data (hb and fs)
+            hb2(:,1:Nch/2)=hbr;
+            
+            %left hem both participants
+            load([path '/FF_' num2str(i) '_MES_Probe2.mat']); %get data (hb and fs)
+            hb1(:,Nch/2+1:Nch)=hbr; %next 22 channels left hem
+            load([path '/FF_' num2str(i) '_MES_Probe4.mat']); %get data (hb and fs)
+            hb2(:,Nch/2+1:Nch)=hbr;
+        else
+            error('chromophore not specified.');
+        end
+        
+        %now calculate sliding window coherence for every channel
+        for channel=1:length(channellist)%Nch
+            
+            ch=channellist(channel);
+            
+            %get signal of interest = soi
+            if ~isnan(hb1(1, ch)) && ~isnan(hb2(1, ch))   % check if this channel was not rejected in both subjects during preprocessing
+                sigPart1 = [t, hb1(:,ch)];
+                sigPart2 = [t, hb2(:,ch)];
                 
                 %calc coherence
-                [Rsq{ch}, ~, ~, coi, ~] = wtc(sigPart1, sigPart2, 'mcc', 0);                % Rsq=r square - measure for coherence
+                [Rsq{ch}, ~, ~, coi, ~] = wtc(sigPart1, sigPart2, 'mcc', 0);    % Rsq = r square - measure for coherence
                 
-                %NaN everything outside coi
+                %NaN everything outside cone of influence = coi
                 for j=1:1:length(coi)
-                    Rsq{ch}(period >= coi(j), j) = NaN; %outer bracket, but for real time need to NaN every window at borders
+                    Rsq{ch}(period >= coi(j), j) = NaN; %outer bracket, but for real time need to NaN every window at borders. We'll do later.
                 end
                 
                 %average over periods to get soi
                 soi=mean(Rsq{ch}(pnoi(1):pnoi(2),:),1,'omitnan'); %soi=signal of interest, avaraged over period if interest
+            else
+                warning(['houston, we are having a problem in channel ' num2str(ch) 'for dyad ' num2str(i)]);
             end
             
+            
             %now do window calc
-            %calculate rest block completely
-            c_results_rest(ch,i)=mean(soi(1:1800),'omitnan');
+            soi_task=soi(task_indices); %soi for task block
+            soi_rest=soi(rest_indices); %soi for rest block
             
-            
-            %and different window lengths separately
-            
-            soi_task=soi(task_indices); %signal of interest for task block
-            soi_rest=soi(rest_indices);
-            
+            %and finally: here's the sliding window
             c_task_win=mean_wtc_sliding_window(soi_task, cutoff, windowsize);
             c_rest_win=mean_wtc_sliding_window(soi_rest, cutoff, windowsize);
             
-            c_results_task(ch,i,:)=c_task_win;
-            c_results_rest_win(ch,i,:)=c_rest_win;
+            %assign to mats
+            c_results_task(ch,i,:)=c_task_win; %we'll use this later for sliding window CNR = contrast-to-noise ratio
+            mc_results_task(ch,i)=mean(c_results_task(ch,i,:), 'omitnan');
+            c_results_rest_win(ch,i,:)=c_rest_win; %not used, only for calculation of mean
+            mc_results_rest_win(ch,i)=mean(c_results_rest_win(ch,i,:), 'omitnan');
             
             %create delta as measure
-            if ~isfinite(c_task_win)
+            if any(~isfinite(c_task_win)) || any(~isfinite(c_rest_win))
                 warning(['pair ' num2str(i) 'channel ' num2str(ch) 'needs to be checked.']);
                 c_delta(ch,i,:)=NaN(defacto_length_results,1);
+                mc_delta(ch,i)=NaN;
             else
-                c_delta(ch,i,:)=c_results_task(ch,i,:)-c_results_rest(ch,i);
+                c_delta(ch,i,:)=c_results_task(ch,i,:)-mc_results_rest_win(ch,i); %for sliding window CNR plots
+                mc_delta(ch,i)=mc_results_task(ch,i)-mc_results_rest_win(ch,i); %for histograms
             end
-            
-            
+            %
             
         end %end of loop over channels
         
@@ -177,178 +228,151 @@ for win=1:length(windowsizelist)
     
     %% group stats
     
-    %check for infs
-    culprits_task=find(~isfinite(c_results_task));
     
-    c_delta_noshit=c_delta;
-    c_delta_noshit(culprits_task)=NaN;
-    
-    c_task_noshit=c_results_task;
-    c_task_noshit(culprits_task)=NaN;
-    
-    c_delta_clean=NaN(size(c_delta_noshit));
-    %c_corr_clean=NaN(size(c_task_noshit));
-    
-    c_corr=NaN(Nch,defacto_length_results); %correlation for effect size correction
-    c_results_p=NaN(Nch,defacto_length_results);
-    Cohens_d_dyad=NaN(Nch, length(pairs), defacto_length_results);
-    %Cohens_d_std=NaN(Nch,defacto_length_results);
-    %Cohens_d_corrected=NaN(Nch,defacto_length_results);
-    
+    %initialize
+    winCohens_d_dyad=NaN(Nch, length(pairs), defacto_length_results); %for sliding windowed CNR
+    totCohens_d_dyad=NaN(Nch, length(pairs)); %for histograms
     
     
     for c=1:Nch
         for l=1:defacto_length_results
             for d=1:length(pairs)
                 
-                %corr for every window for effect size
-                %     c_corr(c,l)=corr(squeeze(c_task_noshit(c,:,l))', squeeze(c_results_rest(c,:))');
-                
-                Cohens_d_dyad(c,d,l)= c_delta(c,d,l)/std(c_results_rest_win(c,d,:));
-                
-                %    Cohens_d_std(c,l)=std(c_deltaMat,0,1,'omitnan')/sqrt(size(c_deltaMat,1)); %SEM
-                %     Cohens_d_corrected(c,l)=Cohens_d_simple(c,l)*1/sqrt(2*(1-c_corr(c,l)));
-                
-                %         %wilcoxon signed rank for every window
-                %
-                %         if isempty(find(isnan(c_delta(c,:,l))==0))  %#ok<*EFIND>
-                %             continue
-                %         end
-                %        [p,h,stats] = signrank(squeeze(c_delta(c,:,l)),0,'tail','right');
-                %
-                %         c_results_p(c,l)=p;
-                
-                
-                %clean data for better display
-                %      c_corr_vec_without_outliers=rmoutliers(squeeze(c_corr(c,:,l)),'mean');
-                c_delta_vec_without_outliers=rmoutliers(squeeze(c_delta_noshit(c,:,l)),'mean');
-                c_delta_clean(c,1:length(c_delta_vec_without_outliers),l)=c_delta_vec_without_outliers;
-                
+                winCohens_d_dyad(c,d,l)= c_delta(c,d,l)/std(c_results_rest_win(c,d,:));
+                totCohens_d_dyad(c,d)=mc_delta(c,d)/std(c_results_rest_win(c,d,:));
             end
             
         end
     end
     
     
-    % c_disp=squeeze(mean(c_delta_clean,2));
-    %
-    % task_times=(task_indices-(1800+600)+windowsize)/fs;
-    % task_times=task_times(1:end-windowsize);
+    %% write out data, start from back side
+    %significant channels in the main study: 10,14,31,40
     windowsize_sec=windowsize/fs;
     
-    %significant channels in the main study: 10,14,31,40
-    %% von hinten auffüllen
+    %for sliding CNR plots
+    meanCohen10time(end-defacto_length_results+1:end,win)=squeeze(mean(winCohens_d_dyad(10,:,:),2));
+    sdCohen10time(end-defacto_length_results+1:end,win)=squeeze(std(winCohens_d_dyad(10,:,:),0,2)/sqrt(size(winCohens_d_dyad,2))); %SEM
+    meanCohen14time(end-defacto_length_results+1:end,win)=squeeze(mean(winCohens_d_dyad(14,:,:),2));
+    sdCohen14time(end-defacto_length_results+1:end,win)=squeeze(std(winCohens_d_dyad(14,:,:),0,2)/sqrt(size(winCohens_d_dyad,2)));
+    meanCohen31time(end-defacto_length_results+1:end,win)=squeeze(mean(winCohens_d_dyad(31,:,:),2));
+    sdCohen31time(end-defacto_length_results+1:end,win)=squeeze(std(winCohens_d_dyad(31,:,:),0,2)/sqrt(size(winCohens_d_dyad,2)));
+    meanCohen40time(end-defacto_length_results+1:end,win)=squeeze(mean(winCohens_d_dyad(40,:,:),2));
+    sdCohen40time(end-defacto_length_results+1:end,win)=squeeze(std(winCohens_d_dyad(40,:,:),0,2)/sqrt(size(winCohens_d_dyad,2)));
     
-    meanCohen10time(end-defacto_length_results+1:end,win)=squeeze(mean(Cohens_d_dyad(10,:,:),2));
-    sdCohen10time(end-defacto_length_results+1:end,win)=squeeze(std(Cohens_d_dyad(10,:,:),0,2)/sqrt(size(Cohens_d_dyad,2))); %SEM
-    meanCohen14time(end-defacto_length_results+1:end,win)=squeeze(mean(Cohens_d_dyad(14,:,:),2));
-    sdCohen14time(end-defacto_length_results+1:end,win)=squeeze(std(Cohens_d_dyad(14,:,:),0,2)/sqrt(size(Cohens_d_dyad,2)));
-    meanCohen31time(end-defacto_length_results+1:end,win)=squeeze(mean(Cohens_d_dyad(31,:,:),2));
-    sdCohen31time(end-defacto_length_results+1:end,win)=squeeze(std(Cohens_d_dyad(31,:,:),0,2)/sqrt(size(Cohens_d_dyad,2)));
-    meanCohen40time(end-defacto_length_results+1:end,win)=squeeze(mean(Cohens_d_dyad(40,:,:),2));
-    sdCohen40time(end-defacto_length_results+1:end,win)=squeeze(std(Cohens_d_dyad(40,:,:),0,2)/sqrt(size(Cohens_d_dyad,2)));
+    %total "static" CNR, for histograms and reporting
+    totmeanCohen10(win)=squeeze(mean(totCohens_d_dyad(10,:),2));
+    totsdCohen10(win)=squeeze(std(totCohens_d_dyad(10,:),0,2)/sqrt(size(totCohens_d_dyad,2))); %SEM
+    totmeanCohen14(win)=squeeze(mean(totCohens_d_dyad(14,:),2));
+    totsdCohen14(win)=squeeze(std(totCohens_d_dyad(14,:),0,2)/sqrt(size(totCohens_d_dyad,2))); %SEM
+    totmeanCohen31(win)=squeeze(mean(totCohens_d_dyad(31,:),2));
+    totsdCohen31(win)=squeeze(std(totCohens_d_dyad(31,:),0,2)/sqrt(size(totCohens_d_dyad,2))); %SEM
+    totmeanCohen40(win)=squeeze(mean(totCohens_d_dyad(40,:),2));
+    totsdCohen40(win)=squeeze(std(totCohens_d_dyad(40,:),0,2)/sqrt(size(totCohens_d_dyad,2))); %SEM
     
 end  %loop over windowsizes
-%%
 
-f=figure;
-f.Position(3:4)=[1200 900];
+
+
+%% Plot data, sliding CNR
+
+fig=figure;
+fig.Position(3:4)=[1800 900];
 tls=tiledlayout('flow');
 tls.TileSpacing='none';
 tls.Padding='compact';
 
-  title(tls,['Contrast-to-noise ratio (\equiv Cohen''s d)'], 'FontSize', 20, 'FontWeight', 'bold');
-  
+title(tls,['Contrast-to-noise ratio (\equiv Cohen''s d), parts teaching, r+l IFG/DLPFC'], 'FontSize', 20, 'FontWeight', 'bold');
+
+
 for  win=1:length(windowsizelist)
     
-ax(win)=nexttile;
-%x=1+300:3901+300;
-%plot(x,Cohens_d_dyad(10,:),x,Cohens_d_dyad(14,:),x,Cohens_d_dyad(40,:),x,Cohens_d_dyad(31,:), 'LineWidth',2);
-shadedErrorBar(1:length(task_indices), meanCohen10time(:,win), sdCohen10time(:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color',[0.8500 0.3250 0.0980]},'patchSaturation', 0.3); %red
-hold on
-shadedErrorBar(1:length(task_indices),meanCohen14time(:,win), sdCohen14time(:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0.9290 0.6940 0.1250]},'patchSaturation', 0.3); %yellow 
-shadedErrorBar(1:length(task_indices),meanCohen31time(:,win), sdCohen31time(:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0.4660 0.6740 0.1880]},'patchSaturation', 0.3); %green
-shadedErrorBar(1:length(task_indices),meanCohen40time(:,win), sdCohen40time(:,win), 'lineProps',{'-', 'LineWidth',1.5, 'Color', [0 0.4470 0.7410]},'patchSaturation', 0.3); %blue
-hold off 
-yline(0);
-
-%  ax.XTick=1:600:4000;
-%  strval=mat2str(windowsize/fs:60:4000/fs);
-%  strval=erase(strval,'[');
-%  strval=erase(strval,']');
-%  strval=split(strval,' ');
-%  ax.XTickLabel=strval;
- ax(win).FontSize = 14;
- %set(Im, 'XData',task_times);
-
-legend('channel 10', 'channel 14', 'channel 40', 'channel 31');
- xlabel('time (samples)');
- ylabel('Contrast-to-noise ratio');
-  title(ax(win), ['windowsize=' num2str(windowsizelist(win)/10) ' sec']);
-  
+    ax(win)=nexttile;
+    
+    shadedErrorBar((1:length(task_indices))/fs, meanCohen10time(:,win), sdCohen10time(:,win), 'lineProps',{'-', 'LineWidth',2, 'Color',[0.8500 0.3250 0.0980]},'patchSaturation', 0.3); %red
+    hold on
+    shadedErrorBar((1:length(task_indices))/fs,meanCohen14time(:,win), sdCohen14time(:,win), 'lineProps',{'-', 'LineWidth',2, 'Color', [0.9290 0.6940 0.1250]},'patchSaturation', 0.3); %yellow
+    shadedErrorBar((1:length(task_indices))/fs,meanCohen31time(:,win), sdCohen31time(:,win), 'lineProps',{'-', 'LineWidth',2, 'Color', [0.4660 0.6740 0.1880]},'patchSaturation', 0.3); %green
+    shadedErrorBar((1:length(task_indices))/fs,meanCohen40time(:,win), sdCohen40time(:,win), 'lineProps',{'-', 'LineWidth',2, 'Color', [0 0.4470 0.7410]},'patchSaturation', 0.3); %blue
+    hold off
+    yline(0, 'LineWidth', 1.5);
+    ax(win).LineWidth = 1.5;
+    box on;
+    
+    ax(win).FontSize = 18;
+    
+    legend('channel 10', 'channel 14', 'channel 40', 'channel 31');
+    xlabel('time (sec)');
+    ylabel('Contrast-to-noise ratio');
+    title(ax(win), ['windowsize=' num2str(windowsizelist(win)/10) ' sec']);
+    ax(win).XLim=[0 420];
 end
-linkaxes([ax(1),ax(2), ax(3), ax(4), ax(5)],'xy');
+linkaxes([ax(1),ax(2), ax(3), ax(4)],'xy');
 
-%% make window histogram
 
-meanmeanCohen10=mean(meanCohen10time,1,'omitnan');
-sdmeanCohen10=mean(sdCohen10time,1,'omitnan');%std(meanCohen10time,0,1,'omitnan')/sqrt(size(meanCohen10time,1));
-meanmeanCohen14=mean(meanCohen14time,1,'omitnan');
-sdmeanCohen14=mean(sdCohen14time,1,'omitnan');%std(meanCohen14time,0,1,'omitnan')/sqrt(size(meanCohen14time,1));
-meanmeanCohen31=mean(meanCohen31time,1,'omitnan');
-sdmeanCohen31=mean(sdCohen31time,1,'omitnan');%std(meanCohen31time,0,1,'omitnan')/sqrt(size(meanCohen31time,1));
-meanmeanCohen40=mean(meanCohen40time,1,'omitnan');
-sdmeanCohen40=mean(sdCohen40time,1,'omitnan');%std(meanCohen40time,0,1,'omitnan')/sqrt(size(meanCohen40time,1));
 
-f=figure;
-f.Position(3:4)=[800 600];
+%% make window histogram for absolute CNR
+
+fhist=figure;
+fhist.Position(3:4)=[800 600];
 tls=tiledlayout('flow');
-txt=title(tls,'Contrast-to-noise-ratio (CNR) for different integration window lengths');
+txt=title(tls,'music data: Contrast-to-noise-ratio (CNR) for different integration window lengths');
 txt.FontSize=18;
 txt.FontWeight='bold';
 
 windows=windowsizelist/10;
 
 ax1=nexttile;
-bar(windows, meanmeanCohen10, 'LineWidth', 1.5); hold on
-er=errorbar(windows,meanmeanCohen10,sdmeanCohen10,sdmeanCohen10,'LineWidth', 1.5);
+b=bar(windows, totmeanCohen10, 'LineWidth', 1.5); hold on
+b.BaseLine.LineWidth=1.5;
+er=errorbar(windows,totmeanCohen10,totsdCohen10,totsdCohen10,'LineWidth', 1.5);
 er.Color=[0 0 0];
 er.LineStyle='none';
-ax1.FontSize=13;
-ax1.YLim=[-1 10];
+ax1.FontSize=18;
+ax1.LineWidth = 1.5;
+box on;
+ax1.YLim=[-0.5 3];
 ylabel('CNR');
 xlabel('window length (sec)');
 title(ax1, 'channel 10');
 
 ax2=nexttile;
-bar(windows, meanmeanCohen14, 'LineWidth', 1.5); hold on
-er=errorbar(windows,meanmeanCohen14,sdmeanCohen14,sdmeanCohen14,'LineWidth', 1.5);
+b=bar(windows, totmeanCohen14, 'LineWidth', 1.5); hold on
+b.BaseLine.LineWidth=1.5;
+er=errorbar(windows,totmeanCohen14,totsdCohen14,totsdCohen14,'LineWidth', 1.5);
 er.Color=[0 0 0];
 er.LineStyle='none';
-ax2.FontSize=13;
+ax2.FontSize=18;
+ax2.LineWidth = 1.5;
+box on;
 ylabel('CNR');
 xlabel('window length (sec)');
 title(ax2, 'channel 14');
 
 ax3=nexttile;
-bar(windows, meanmeanCohen31, 'LineWidth', 1.5); hold on
-er=errorbar(windows,meanmeanCohen31,sdmeanCohen31,sdmeanCohen31,'LineWidth', 1.5);
+b=bar(windows, totmeanCohen31, 'LineWidth', 1.5); hold on
+b.BaseLine.LineWidth=1.5;
+er=errorbar(windows,totmeanCohen31,totsdCohen31,totsdCohen31,'LineWidth', 1.5);
 er.Color=[0 0 0];
 er.LineStyle='none';
-ax3.FontSize=13;
+ax3.FontSize=18;
+ax3.LineWidth = 1.5;
+box on;
 ylabel('CNR');
 xlabel('window length (sec)');
 title(ax3, 'channel 31');
 
 ax4=nexttile;
-bar(windows, meanmeanCohen40, 'LineWidth', 1.5); hold on
-er=errorbar(windows,meanmeanCohen40,sdmeanCohen40,sdmeanCohen40,'LineWidth', 1.5);
+b=bar(windows, totmeanCohen40, 'LineWidth', 1.5); hold on
+b.BaseLine.LineWidth=1.5;
+er=errorbar(windows,totmeanCohen40,totsdCohen40,totsdCohen40,'LineWidth', 1.5);
 er.Color=[0 0 0];
 er.LineStyle='none';
-ax4.FontSize=13;
+ax4.FontSize=18;
+ax4.LineWidth = 1.5;
+box on;
 ylabel('CNR');
 xlabel('window length (sec)');
 title(ax4, 'channel 40');
 
-%linkaxes([ax1,ax2, ax3, ax4],'y');
-linkaxes([ax2, ax3, ax4],'y');
+linkaxes([ax1, ax2, ax3, ax4],'xy');
