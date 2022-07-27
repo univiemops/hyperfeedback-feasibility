@@ -235,13 +235,14 @@ for win=1:length(windowsizelist)
     
     
     for c=1:Nch
-        for l=1:defacto_length_results
-            for d=1:length(pairs)
-                
+        for d=1:length(pairs)
+            for l=1:defacto_length_results
+
                 winCohens_d_dyad(c,d,l)= c_delta(c,d,l)/std(c_results_rest_win(c,d,:));
-                totCohens_d_dyad(c,d)=mc_delta(c,d)/std(c_results_rest_win(c,d,:));
+                
             end
             
+            totCohens_d_dyad(c,d)=mc_delta(c,d)/std(c_results_rest_win(c,d,:));
         end
     end
     
