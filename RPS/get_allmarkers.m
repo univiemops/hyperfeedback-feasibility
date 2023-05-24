@@ -26,7 +26,7 @@
 
 
 
-path='enter your path here' %Unix convention used
+path=['yourPathToData/hmrData']; %Unix convention used, adapt if on Windows system
 
 pairs={'01','02','03','04','05','06','08','09','10','11','13','14','15','17','18','19','20','21','22','23','24','26','28','29','30','31','32'};
 
