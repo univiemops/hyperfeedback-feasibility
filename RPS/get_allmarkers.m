@@ -1,7 +1,8 @@
-%get markers from files 's' for 'rest' and 'task' (overall task)
-%for now only for condition FP
+%% get markers from files 's' for 'rest' and 'task' (overall task) to mark
+%exact starting/ endpoints
 
-%KK 14.12.20
+%only for condition FP valid
+
 %assume three rest blocks and two task blocks per file
 
 %assume furthermore: (valid at least for FP)
@@ -10,8 +11,7 @@
 %s(:,3) is also task, more specific task. Called 'subtask' furtheronwards.
 %s always demarks starting point of incidents.
 
-% Seems like for PS it holds: s(:,8) is rest, s(:,9) is task, s(:,10) is
-% some subtask...
+
 
 %for rest take beginning of rest to task marker
 %for task take first and last subtask marker
@@ -20,15 +20,16 @@
 %loop over all subjects and conditions
 %load in 's'
 %calculate diffs
-%write into matrices to safe later on
+%write into matrices to save later on
 
-%check no-matches manually for safety!
+
 
 
 
 path=['/Users/kathrin/data/RPS/Kathrin_collab/hmrData'];
 
 pairs={'01','02','03','04','05','06','08','09','10','11','13','14','15','17','18','19','20','21','22','23','24','26','28','29','30','31','32'};
+
 conds={'FP','PS', 'PD','C'};
 flag_nRestgrtrnTask=false;
 
@@ -37,14 +38,14 @@ nomatch=zeros(length(pairs),length(conds))*NaN;
 
 
 
-for c=1%:length(conds) %for now working only for FP   
+    c=1; %use only Free Play 'FP'
     
     errorcount=0;
     errorcount_correctRandT=0;
     errorcount_correctRnotT=0;
     N_done=0;
     
-    for i=1:length(pairs) %i=15: pair 18 is a faultless pair
+    for i=1:length(pairs) 
         flag_nRestgrtrnTask=false;
         flag_subj2needed=false;
         flag_hopelesscase=false;
@@ -79,7 +80,6 @@ for c=1%:length(conds) %for now working only for FP
             subtaskMat(:,2)=s1_subtask(31:60);            
             N_done=N_done+1;
         else
-            % errorcount_correctRnotT=errorcount_correctRnotT+1;
             errorcount=errorcount+1;
             flag_subj2needed=true;
             disp(['subj 2 needed for pair ' pairs{i}]);
@@ -95,7 +95,7 @@ for c=1%:length(conds) %for now working only for FP
         
         if length(s1_rest)~=length(s2_rest) || length(s1_task)~=length(s2_task) || length(s1_subtask)~=length(s2_subtask) 
             if flag_subj2needed && length(s2_rest)==3 && length(s2_subtask)==60 %trying to get sensible data from subject 2 now
-                % if length(s1_rest)==3 %&& length(s1_task)~=3 %I think this could be general case, need to check
+
                 for count=1:3
                     restMat(count,1)=s2_rest(count);
                     restMat(count,2)=s2_task(find(s2_task>s2_rest(count),1,'first'));
@@ -111,8 +111,8 @@ for c=1%:length(conds) %for now working only for FP
                         taskMat(count,2)=s2_subtask(find(s2_subtask<s2_rest(count+1),1,'last')); %find last subtask marker before rest
                     end
                 end
-            subtaskMat(:,1)=s1_subtask(1:30);
-            subtaskMat(:,2)=s1_subtask(31:60);                 
+            subtaskMat(:,1)=s2_subtask(1:30);
+            subtaskMat(:,2)=s2_subtask(31:60);                 
             N_done=N_done+1;
             else
                 disp('subject1 and subject2 have different number of codings.');
@@ -133,4 +133,3 @@ for c=1%:length(conds) %for now working only for FP
 
     end
     
-end
