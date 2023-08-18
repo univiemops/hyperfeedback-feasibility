@@ -100,11 +100,6 @@ p=0.99;
 dodSpline = hmrMotionCorrectSpline(dod, t, SD, tIncCh, p);   
 
 
-%here comes the shitty workaround to get rid of the NaNs that make the
-%filter crash
-%dodSpline(:,removecol)=0;
-
-
 
 % % % % bandpass filtering
 lpf             = 0.5;                                                  % in Hz
@@ -138,15 +133,10 @@ hbr(:,removechan')=NaN(size(hbo,1),size(removechan,1));
 
 clear removecol removechan;
 
-% 
-
 
        save([savepathn filen '.mat'], 'hbo','hbr','s','t', 'fs');
-% 
 
 
-
-% 
      end
  end
 end
