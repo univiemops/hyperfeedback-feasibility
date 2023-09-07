@@ -1,7 +1,8 @@
-%% Preprocessing for music data adapted from preprocessing for RPS data
-% with Homer2
-%
-% KK June 2021, bugfix Jan 2023
+%% Preprocessing for music data 
+% using Homer2
+% this preprocessing is reproducing the preprocessing of the RPS data set for the music data set,
+% RPS preprocessing can be found at https://github.com/tnguyen1992/RPS, RPS_2.m
+% KK June 2021, bugfix Jan 2023, using code of TN
 
 %FF is the prefix for the “part learning” condition
 %FF2 is the prefix for the “whole learning” condition
