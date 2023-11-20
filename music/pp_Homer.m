@@ -1,8 +1,8 @@
 %% Preprocessing for music data 
-% using Homer2
-% this preprocessing is reproducing the preprocessing of the RPS data set for the music data set,
-% RPS preprocessing can be found at https://github.com/tnguyen1992/RPS, RPS_2.m
-% KK June 2021, bugfix Jan 2023, using code of TN
+%using Homer2
+%this preprocessing is reproducing the preprocessing of the RPS data set for the music data set,
+%RPS preprocessing can be found at https://github.com/tnguyen1992/RPS, RPS_2.m
+%KK June 2021, bugfix Jan 2023, using code of TN
 
 %FF is the prefix for the “part learning” condition
 %FF2 is the prefix for the “whole learning” condition
@@ -15,9 +15,8 @@
 %FOI: 0.07-0.15Hz  (period 6.61-14.01s)
 %musical phrase 6.64\pm 1.56s
 %Nch=44
-% compute complete rest block, take blocks of task phase
-% taking hbo, as in paper
-
+%compute complete rest block, take blocks of task phase
+%taking HbO, as in paper
 
 
 
@@ -48,11 +47,6 @@ for npair=1:Npair
    
 % convert the wavelength data to optical density
 
-%if one chromophore is bad, we will not be able to distinguish
-%between hbo and hbr. Therefore we need to block the whole channel.
-
-
-
 dod = hmrIntensity2OD(d);    %writes NaN in dod                       
 
 
@@ -71,10 +65,10 @@ dod = hmrIntensity2OD(d);    %writes NaN in dod
                                  SNRthresh, SDrange, resetFlag);
                              
 % %problem: some intensity values are negative or 0. We need to eliminate
-% these bad channels.
+% these bad channels for both chromophores.
 [~,col]=find(d<=0); %find all columns with bullsh*t values
 removecol=unique(col);
-disp(removecol);
+%disp(removecol);
 
 dod(:,removecol)=0; %for smooth further processing use '0', NaN in the end.
 
@@ -133,7 +127,6 @@ hbo(:,removechan')=NaN(size(hbo,1),size(removechan,1));
 hbr(:,removechan')=NaN(size(hbo,1),size(removechan,1));
 
 clear removecol removechan;
-
 
        save([savepathn filen '.mat'], 'hbo','hbr','s','t', 'fs');
 
