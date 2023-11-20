@@ -1,19 +1,19 @@
-%% coherence calculation and sign test for the music data set.
-% This script calculates the wtc coherence within a certain frequency band 
-%(period of interest) for different task windows.
+%% coherence calculation and detectability test for the music data set.
+% This script calculates the wavelet tranform coherence within a certain 
+%frequency band (period of interest) for different task windows.
 % It then calculates the difference in coherence between the task
-% window/unit of interest and the complete rest block. Statistics are
-% assessed via a sign test, indicating if there are significantly more
-% windows with higher coherence for task compared to the baseline
-% condition. The ratios and numbers of correct vs. incorrect
-% classifications are plotted for illustration. This would be ratio of
-% correct vs. incorrect feedback in a real experiment.
+% window/unit of interest and the complete rest block and determines the 
+% sign (VZ=Vorzeichen) of the coherence difference. Positive sign is a 
+% success, negative a fail, as would be the case in a binary feedback.
+% Statistics are assessed via a generalized linear mixed model under the
+% null hypothesis that the detection accuracy is at chance.
+% The accuracy/ detection percentage are plotted for illustration.
 % 
 % last version KK Oct 2023
 
 
 
-path=['/Users/kathrin/data/Music_fNIRS/new_pp/ppData']; 
+path=['/Your/Path/To/Data']; 
 %use your data path; Unix System used, adapt accordingly
 
 %experiment specifics
