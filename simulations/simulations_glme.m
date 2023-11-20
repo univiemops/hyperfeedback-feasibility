@@ -1,9 +1,10 @@
 %% simulate artificial subjects based on HRF-convolved event model plus noise
 % model: rest - task - rest, rest - zero activity, task: nTrials events
 % with iti intertrial interval.
-% plot exemplary subjects, simulate nIterations times nPairs of subjects,
-% calculate task windows of different sizes, plot histogram of ratio of
-% correct detection/feedback.
+% plot exemplary subjects, then simulate nIterations times nPairs of 
+% subjects, calculate task windows of different sizes, determine 
+% detectabililty and plot accuracy/ detection percentage.
+%
 % Needs SPM HRF function!
 %
 % KK Oct 2023 last version
